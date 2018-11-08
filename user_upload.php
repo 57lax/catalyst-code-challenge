@@ -9,6 +9,16 @@
     define('MAX_SURNAME', 150);
     define('MAX_EMAIL', 50);
 
+    define('CRITICAL_ERROR', "CRITICAL ERROR");
+    define('WARNING', "WARNING");
+
+    define('INVALID_EMAIL', array("message" => 'Email has incorrect format', "type"=>CRITICAL_ERROR));
+    define('MISSING_EMAIL', array("message" => 'Email is missing', "type"=>CRITICAL_ERROR));
+    define('NONUNIQUE_EMAIL', array("message" => 'Email is not unique', "type"=>CRITICAL_ERROR));
+    define('VALUE_TOO_LONG', array("message" => 'One of the values is too long', "type"=>CRITICAL_ERROR));
+    define('MISSING_NAME', array("message" => 'Name is missing', "type"=>WARNING) );
+    define('MISSING_SURNAME', array("message" => 'Surname name is missing', "type"=>WARNING));
+
     $shortopts  = "";
     $shortopts .= "u:";
     $shortopts .= "p:";
@@ -87,9 +97,10 @@
             while(($data = fgetcsv($handle, 1000, ",")) !== FALSE){
                 if($row_no){
                     $data = correct_row($data);
+                    $validation_data = validate_row($data, $emails);
 
                     if($dry_run) {
-                        display($data, $row_no);
+                        display($data, $validation_data, $row_no);
                     } else {
                     }
                 }
@@ -99,8 +110,9 @@
         fclose($handle);
     }
 
-    function display($data, $row_no){
+    function display($data, $validation, $row_no){
         display_row($data, $row_no);
+        display_validation($validation);
         echo " \n";
     }
 
@@ -108,11 +120,44 @@
         echo $row_no.". ".$data[NAME_POSITION]." " .$data[SURNAME_POSITION]." \t".$data[EMAIL_POSITION]."\t";
     }
 
+    function display_validation($validation){
+        for($i=0; $i<count($validation); $i++){
+            echo $validation[$i]["type"].": ".$validation[$i]["message"]."\t";
+        }
+    }
+
     function correct_row($data){
         $data[NAME_POSITION] = ucfirst(strtolower(preg_replace('/\s+/', '', $data[NAME_POSITION])));
         $data[SURNAME_POSITION] = ucfirst(strtolower(preg_replace('/\s+/', '', $data[SURNAME_POSITION])));
         $data[EMAIL_POSITION] = strtolower(preg_replace('/\s+/', '', $data[EMAIL_POSITION]));
         return $data;
+    }
+
+    function validate_row($data, $emails){
+        $validation_result = array();
+
+        if(!preg_match('/^([a-zA-Z0-9_\-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)$/',$data[EMAIL_POSITION] )){
+            array_push($validation_result, INVALID_EMAIL);
+        }
+
+        if($data[EMAIL_POSITION] == '') array_push($validation_result, MISSING_EMAIL);
+
+        if($data[NAME_POSITION] == '') array_push($validation_result, MISSING_NAME);
+
+        if($data[SURNAME_POSITION] == '') array_push($validation_result, MISSING_SURNAME);
+
+        if(strlen($data[EMAIL_POSITION]) > MAX_NAME 
+                || strlen($data[SURNAME_POSITION]) > 150 
+                || strlen($data[NAME_POSITION]) > 50) 
+            array_push($validation_result, VALUE_TOO_LONG);
+        
+        if(in_array($data[EMAIL_POSITION], $emails)) {
+            array_push($validation_result, NONUNIQUE_EMAIL);
+        }else {
+            array_push($emails, $data[EMAIL_POSITION]);
+        };
+
+        return $validation_result;
     }
 
 
@@ -136,7 +181,7 @@
             create_table($pdo);
         }else{
             if(array_key_exists("file", $options)) {
-                parse_file($options["file"], TRUE, $pdo);
+                parse_file($options["file"], array_key_exists("dry_run", $options), $pdo);
             } else {
                 echo "No file specified";
             }
