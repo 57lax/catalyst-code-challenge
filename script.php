@@ -30,6 +30,34 @@
         return $db_connection;
     }
 
+    function create_table(&$pdo){
+        $create_table = true; 
+        if(tableExists($pdo, TABLE_NAME)){
+            print("Table already exists. Would you like to drop current table and create new one? All the data will be lost (y/n) ");
+            $ans = fgets(STDIN);
+            if(preg_replace('/\s+/', '',$ans) == "y") {
+                $sql ="DROP TABLE ".  TABLE_NAME .";";
+                $pdo->exec($sql);
+                print("Table dropped \n");
+            }else {
+                $create_table = false;
+            }
+        }
+
+        if($create_table){
+            try {
+                $sql ="CREATE table ". TABLE_NAME."(
+                    email VARCHAR(".MAX_EMAIL.") PRIMARY KEY,
+                    name VARCHAR(".MAX_NAME."), 
+                    surname VARCHAR(".MAX_SURNAME."));";
+                $pdo->exec($sql);
+                echo "Created a new table: ".TABLE_NAME."\n";
+            } catch(PDOException $e) {
+                echo 'Error while creating table: ' .$e->getMessage();
+            }
+        }
+    }
+
     function print_help(){
         echo "Available directives: \n";
         echo "--file <file>\t – the name of the CSV to be parsed \n";
@@ -47,7 +75,7 @@
     }elseif( array_key_exists("h", $options) && array_key_exists("p", $options) && array_key_exists("u", $options)){
         $pdo = connect_to_DB($options["h"], $options["u"], $options["p"]);
         if(array_key_exists("create_table", $options)){
-            echo "Creates table";
+            create_table($pdo);
         }else{
             if(array_key_exists("file", $options)) {
                 echo "Parse file";
