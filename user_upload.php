@@ -17,7 +17,7 @@
     define('NONUNIQUE_EMAIL', array("message" => 'Email is not unique', "type"=>CRITICAL_ERROR));
     define('VALUE_TOO_LONG', array("message" => 'One of the values is too long', "type"=>CRITICAL_ERROR));
     define('MISSING_NAME', array("message" => 'Name is missing', "type"=>WARNING) );
-    define('MISSING_SURNAME', array("message" => 'Surname name is missing', "type"=>WARNING));
+    define('MISSING_SURNAME', array("message" => 'Surname is missing', "type"=>WARNING));
 
     $shortopts  = "";
     $shortopts .= "u:";
@@ -33,6 +33,7 @@
     $options = getopt($shortopts, $longopts);
 
     function connect_to_DB($servername, $user, $password){
+        $db_connection = null;
         $dsn_options = [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION];
 
         try { 
@@ -66,17 +67,22 @@
 
     function create_table(&$pdo){
         $create_table = true; 
-        if(tableExists($pdo, TABLE_NAME)){
+        if(tableExists($pdo, TABLE_NAME))
+        {
             print("Table already exists. Would you like to drop current table and create new one? All the data will be lost (y/n) ");
             $ans = fgets(STDIN);
-            if(preg_replace('/\s+/', '',$ans) == "y") {
+            if(preg_replace('/\s+/', '',$ans) == "y") 
+            {
                 drop_table($pdo);
-            }else {
+            }
+            else 
+            {
                 $create_table = false;
             }
         }
 
-        if($create_table){
+        if($create_table)
+        {
             try {
                 $sql ="CREATE TABLE ". TABLE_NAME."(
                     email VARCHAR(".MAX_EMAIL.") NOT NULL PRIMARY KEY,
@@ -90,24 +96,59 @@
         }
     }
 
+    function insert_row($data, &$pdo){
+        $statement = $pdo->prepare('INSERT INTO '.TABLE_NAME.'(email, name, surname) VALUES (:email, :name, :surname)');
+    
+        $statement->execute([
+            'email' => $data[EMAIL_POSITION],
+            'name' => $data[NAME_POSITION],
+            'surname' => $data[SURNAME_POSITION],
+        ]);
+    }
+
     function parse_file($file_name, $dry_run, &$pdo){
         $row_no = 0;
         $emails = array();
-        if(($handle = fopen($file_name, "r")) !== FALSE){
-            while(($data = fgetcsv($handle, 1000, ",")) !== FALSE){
-                if($row_no){
+        $inserted = 0;
+        if(($handle = fopen($file_name, "r")) !== FALSE)
+        {
+            while(($data = fgetcsv($handle, 1000, ",")) !== FALSE)
+            {
+                if($row_no)
+                {
                     $data = correct_row($data);
                     $validation_data = validate_row($data, $emails);
 
                     if($dry_run) {
                         display($data, $validation_data, $row_no);
-                    } else {
+                    } 
+                    else 
+                    {
+                        // Check if validation critical errors exist for the given row
+                        $critical_errors = array_values(array_filter($validation_data, function($d) {
+                            return $d["type"] === CRITICAL_ERROR;
+                        }));
+
+                        // Insert if no errors, do not insert otherwise
+                        if(!count($critical_errors) > 0) 
+                        {
+                            insert_row($data, $pdo);
+                            $inserted++;
+                        } 
+                        else 
+                        {
+                            echo "Row $row_no NOT INSERTED Reason: ";
+                            echo  display_validation($critical_errors);
+                            echo "\n";
+                        }
                     }
                 }
                 $row_no++;
             }
         }
         fclose($handle);
+        echo "Total number of ".$inserted. " rows inserted. ";
+
     }
 
     function display($data, $validation, $row_no){
@@ -117,12 +158,15 @@
     }
 
     function display_row($data, $row_no) {
-        echo $row_no.". ".$data[NAME_POSITION]." " .$data[SURNAME_POSITION]." \t".$data[EMAIL_POSITION]."\t";
+        $format = '%4u. %-10s %-15s %-25s';
+        echo sprintf($format, $row_no, $data[NAME_POSITION], $data[SURNAME_POSITION], $data[EMAIL_POSITION]);
+        //echo $row_no.". ".$data[NAME_POSITION]." " .$data[SURNAME_POSITION]."   \t".$data[EMAIL_POSITION]."   \t";
     }
 
     function display_validation($validation){
+        $format = '%-15s: %-30s';
         for($i=0; $i<count($validation); $i++){
-            echo $validation[$i]["type"].": ".$validation[$i]["message"]."\t";
+            echo sprintf($format, $validation[$i]["type"], $validation[$i]["message"]);
         }
     }
 
@@ -133,10 +177,11 @@
         return $data;
     }
 
-    function validate_row($data, $emails){
+    function validate_row($data, &$emails){
         $validation_result = array();
 
-        if(!preg_match('/^([a-zA-Z0-9_\-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)$/',$data[EMAIL_POSITION] )){
+        if(!preg_match('/^([a-zA-Z0-9_\-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)$/',$data[EMAIL_POSITION] ))
+        {
             array_push($validation_result, INVALID_EMAIL);
         }
 
@@ -146,16 +191,15 @@
 
         if($data[SURNAME_POSITION] == '') array_push($validation_result, MISSING_SURNAME);
 
-        if(strlen($data[EMAIL_POSITION]) > MAX_NAME 
-                || strlen($data[SURNAME_POSITION]) > 150 
-                || strlen($data[NAME_POSITION]) > 50) 
+        if(strlen($data[EMAIL_POSITION]) > MAX_EMAIL 
+                || strlen($data[SURNAME_POSITION]) > MAX_SURNAME 
+                || strlen($data[NAME_POSITION]) > MAX_NAME) 
             array_push($validation_result, VALUE_TOO_LONG);
         
-        if(in_array($data[EMAIL_POSITION], $emails)) {
+        if(in_array($data[EMAIL_POSITION], $emails)) 
             array_push($validation_result, NONUNIQUE_EMAIL);
-        }else {
+        else 
             array_push($emails, $data[EMAIL_POSITION]);
-        };
 
         return $validation_result;
     }
@@ -173,20 +217,33 @@
         echo "--help\t\t – output the above list of directives with details \n";
     }
 
-    if(array_key_exists("help", $options)){
+    if(array_key_exists("help", $options))
+    {
         print_help();
-    }elseif( array_key_exists("h", $options) && array_key_exists("p", $options) && array_key_exists("u", $options)){
+    }
+    elseif(array_key_exists("h", $options) && array_key_exists("p", $options) && array_key_exists("u", $options))
+    {
         $pdo = connect_to_DB($options["h"], $options["u"], $options["p"]);
-        if(array_key_exists("create_table", $options)){
-            create_table($pdo);
-        }else{
-            if(array_key_exists("file", $options)) {
-                parse_file($options["file"], array_key_exists("dry_run", $options), $pdo);
-            } else {
-                echo "No file specified";
+        if($pdo) {
+            if(array_key_exists("create_table", $options))
+            {
+                create_table($pdo);
+            }
+            else
+            {
+                if(array_key_exists("file", $options)) 
+                {
+                    parse_file($options["file"], array_key_exists("dry_run", $options), $pdo);
+                } 
+                else 
+                {
+                    echo "No file specified";
+                }
             }
         }
-    }else {
+    }
+    else
+    {
         print("You didn't use the script properly. To transfer data to DB remember to specift: user, database, host and source file.\n  Please type --help to see how to use the script");
     }
 
