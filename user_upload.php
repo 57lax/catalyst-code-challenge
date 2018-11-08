@@ -1,5 +1,9 @@
 <?php
 
+    define('NAME_POSITION', 0); 
+    define('SURNAME_POSITION', 1);
+    define('EMAIL_POSITION', 2);
+
     define('TABLE_NAME', "users");
     define('MAX_NAME', 50);
     define('MAX_SURNAME', 150);
@@ -31,21 +35,19 @@
     }
 
     function tableExists($pdo, $table) {
-
         try {
             $result = $pdo->query("SELECT 1 FROM $table LIMIT 1");
         } catch (Exception $e) {
             return FALSE;
         }
 
-        // Result is either boolean FALSE (no table found) or PDOStatement Object (table found)
         return $result !== FALSE;
     }
 
     function drop_table(&$pdo){
         try {
-            $sql ="DROP TABLE ".  TABLE_NAME .";";
-            $pdo->exec($sql);
+            $statement = $pdo->prepare('DROP TABLE '.TABLE_NAME.';');
+            $statement->execute();
         } catch(PDOException $e) {
             echo 'Error while dropping the table: ' .$e->getMessage();
         }
@@ -66,8 +68,8 @@
 
         if($create_table){
             try {
-                $sql ="CREATE table ". TABLE_NAME."(
-                    email VARCHAR(".MAX_EMAIL.") PRIMARY KEY,
+                $sql ="CREATE TABLE ". TABLE_NAME."(
+                    email VARCHAR(".MAX_EMAIL.") NOT NULL PRIMARY KEY,
                     name VARCHAR(".MAX_NAME."), 
                     surname VARCHAR(".MAX_SURNAME."));";
                 $pdo->exec($sql);
@@ -77,6 +79,42 @@
             }
         }
     }
+
+    function parse_file($file_name, $dry_run, &$pdo){
+        $row_no = 0;
+        $emails = array();
+        if(($handle = fopen($file_name, "r")) !== FALSE){
+            while(($data = fgetcsv($handle, 1000, ",")) !== FALSE){
+                if($row_no){
+                    $data = correct_row($data);
+
+                    if($dry_run) {
+                        display($data, $row_no);
+                    } else {
+                    }
+                }
+                $row_no++;
+            }
+        }
+        fclose($handle);
+    }
+
+    function display($data, $row_no){
+        display_row($data, $row_no);
+        echo " \n";
+    }
+
+    function display_row($data, $row_no) {
+        echo $row_no.". ".$data[NAME_POSITION]." " .$data[SURNAME_POSITION]." \t".$data[EMAIL_POSITION]."\t";
+    }
+
+    function correct_row($data){
+        $data[NAME_POSITION] = ucfirst(strtolower(preg_replace('/\s+/', '', $data[NAME_POSITION])));
+        $data[SURNAME_POSITION] = ucfirst(strtolower(preg_replace('/\s+/', '', $data[SURNAME_POSITION])));
+        $data[EMAIL_POSITION] = strtolower(preg_replace('/\s+/', '', $data[EMAIL_POSITION]));
+        return $data;
+    }
+
 
     function print_help(){
         echo "Available directives: \n";
@@ -98,7 +136,7 @@
             create_table($pdo);
         }else{
             if(array_key_exists("file", $options)) {
-                echo "Parse file";
+                parse_file($options["file"], TRUE, $pdo);
             } else {
                 echo "No file specified";
             }
