@@ -30,15 +30,35 @@
         return $db_connection;
     }
 
+    function tableExists($pdo, $table) {
+
+        try {
+            $result = $pdo->query("SELECT 1 FROM $table LIMIT 1");
+        } catch (Exception $e) {
+            return FALSE;
+        }
+
+        // Result is either boolean FALSE (no table found) or PDOStatement Object (table found)
+        return $result !== FALSE;
+    }
+
+    function drop_table(&$pdo){
+        try {
+            $sql ="DROP TABLE ".  TABLE_NAME .";";
+            $pdo->exec($sql);
+        } catch(PDOException $e) {
+            echo 'Error while dropping the table: ' .$e->getMessage();
+        }
+        echo "Table dropped \n";
+    }
+
     function create_table(&$pdo){
         $create_table = true; 
         if(tableExists($pdo, TABLE_NAME)){
             print("Table already exists. Would you like to drop current table and create new one? All the data will be lost (y/n) ");
             $ans = fgets(STDIN);
             if(preg_replace('/\s+/', '',$ans) == "y") {
-                $sql ="DROP TABLE ".  TABLE_NAME .";";
-                $pdo->exec($sql);
-                print("Table dropped \n");
+                drop_table($pdo);
             }else {
                 $create_table = false;
             }
