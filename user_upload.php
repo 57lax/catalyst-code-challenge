@@ -300,7 +300,7 @@
                             All other functions will be executed, but the database won't be altered. \n";
         echo "-u\t\t – MySQL username \n";
         echo "-p\t\t – MySQL password \n";
-        echo "-h\t\t – MySQL host \n";
+        echo "-h\t\t – MySQL host in format: mysql:host=your_host_address;dbname=your_db_name\n";
         echo "--help\t\t – output the above list of directives with details \n";
     }
 
