@@ -234,10 +234,24 @@
      * @return array $data Corrected user data.
      */
     function correctRow($data){
-        $data[NAME_POSITION] = ucfirst(strtolower(preg_replace('/\s+/', '', $data[NAME_POSITION])));
-        $data[SURNAME_POSITION] = ucfirst(strtolower(preg_replace('/\s+/', '', $data[SURNAME_POSITION])));
+        $data[NAME_POSITION] = ucfirst(strtolower(preg_replace("/[^a-zA-Z]+/", '', $data[NAME_POSITION])));
+        $data[SURNAME_POSITION] = correctSurname($data[SURNAME_POSITION]);
         $data[EMAIL_POSITION] = strtolower(preg_replace('/\s+/', '', $data[EMAIL_POSITION]));
         return $data;
+    }
+
+    /**
+     * Corrects surname to proper format.
+     *
+     * @param string $surname Surname to correct.
+     * @return string $surname Corrected user surname.
+     */
+    function correctSurname($surname)
+    {
+        $wspaces = array(" – "," ' ", " Mc ", " Mac ");
+        $wospaces = array("-", "'", "Mc", "Mac");
+        $surname = str_replace($wspaces, $wospaces, ucwords(strtolower(str_ireplace($wospaces, $wspaces, $surname))));
+        return $surname;
     }
 
     /**
